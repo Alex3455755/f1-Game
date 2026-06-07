@@ -50,8 +50,20 @@
 
     <!-- Race in progress -->
     <div v-if="raceStarted" class="race-layout">
-      <!-- Live timing -->
-      <div class="timing-panel card">
+      <!-- Left column: track map + timing -->
+      <div class="left-col">
+        <!-- Animated track map -->
+        <TrackMap
+          :results="sortedResults"
+          :current-lap="currentLap"
+          :total-laps="totalLaps"
+          :player-driver-ids="playerDriverIds"
+          :circuit="circuitData"
+          mode="race"
+          class="race-track-map"
+        />
+        <!-- Live timing -->
+        <div class="timing-panel card">
         <div class="timing-header">
           <div class="section-title" style="margin-bottom:0">Live Timing</div>
           <div class="lap-pill">Круг {{ currentLap }}/{{ totalLaps }}</div>
@@ -81,7 +93,8 @@
             <div v-if="r.status === 'dnf'" class="t-dnf">DNF</div>
           </div>
         </div>
-      </div>
+      </div><!-- /timing-panel -->
+      </div><!-- /left-col -->
 
       <!-- Controls panel -->
       <div class="controls-panel">
@@ -218,6 +231,7 @@ import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useGameStore } from '../stores/gameStore';
 import api from '../api';
+import TrackMap from '../components/TrackMap.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -237,6 +251,7 @@ const results = ref([]);
 const radioMessages = ref([]);
 const startCompounds = ref({});
 const radioFeed = ref(null);
+const circuitData = ref(null);
 
 const weatherLabels = { sunny: '☀️ Солнечно', cloudy: '☁️ Облачно', rain: '🌧️ Дождь', heavy_rain: '⛈️ Ливень' };
 const compoundLabels = { soft: 'С Мягкие', medium: 'М Средние', hard: 'Т Твёрдые', intermediate: 'И Переходные', wet: 'Д Дождевые' };
@@ -305,6 +320,7 @@ onMounted(async () => {
   weather.value = setupRes.data.weekend.weather;
   totalLaps.value = setupRes.data.weekend.circuit?.lap_count || 57;
   raceStatus.value = setupRes.data.weekend.status;
+  circuitData.value = setupRes.data.weekend.circuit || null;
 
   // Default compounds
   playerDrivers.value.forEach(d => { startCompounds.value[d.id] = 'medium'; });
@@ -412,6 +428,11 @@ async function nextRound() {
 </script>
 
 <style scoped>
+/* ── Layout ── */
+.race-layout { display: grid; grid-template-columns: 1fr 390px; gap: 16px; }
+.left-col { display: flex; flex-direction: column; gap: 12px; }
+.race-track-map { height: 280px; }
+
 .race-header {
   display: flex;
   justify-content: space-between;
@@ -456,8 +477,6 @@ h1 { font-size: 26px; font-weight: 700; }
   margin: 0 auto 16px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-.race-layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
 
 /* Timing */
 .timing-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }

@@ -27,68 +27,90 @@
       </button>
     </div>
 
+    <!-- Loading with track animation -->
     <div v-if="loading" class="simulating">
-      <div class="sim-spinner"></div>
-      <div>Пилоты на трассе...</div>
+      <TrackMap
+        :results="dummyDrivers"
+        :player-driver-ids="playerDriverIds"
+        :circuit="circuitData"
+        mode="qualifying"
+        class="q-track-loading"
+      />
+      <div class="sim-label">
+        <div class="sim-spinner"></div>
+        <div>Пилоты на трассе...</div>
+      </div>
     </div>
 
     <!-- Results -->
     <div v-if="results.length" class="results-layout">
-      <div class="results-table card">
-        <div class="section-title">Стартовая решётка</div>
-        <div class="results-list">
-          <div
-            v-for="(r, i) in results"
-            :key="r.id"
-            class="result-row"
-            :class="{ player: isPlayerDriver(r.driver_id), eliminated: r.q1_eliminated || r.q2_eliminated }"
-          >
-            <div class="result-pos" :class="posClass(r.position)">{{ r.position }}</div>
-            <div class="team-stripe" :style="{ background: r.driver?.team?.color }"></div>
-            <div class="result-driver">
-              <span class="driver-code-sm">{{ r.driver?.code }}</span>
-              <span class="driver-name-sm">{{ r.driver?.name }}</span>
-            </div>
-            <div class="result-team">{{ r.driver?.team?.short_name }}</div>
-            <div class="result-times">
-              <span class="q-time" :class="{ best: !r.q1_eliminated }">
-                Q1: {{ formatTime(r.q1_time) }}
-              </span>
-              <span v-if="r.q2_time" class="q-time" :class="{ best: !r.q2_eliminated }">
-                Q2: {{ formatTime(r.q2_time) }}
-              </span>
-              <span v-if="r.q3_time" class="q-time best">
-                Q3: {{ formatTime(r.q3_time) }}
-              </span>
-            </div>
-            <div class="result-eliminated">
-              <span v-if="r.q1_eliminated" class="elim-badge">OUT Q1</span>
-              <span v-else-if="r.q2_eliminated" class="elim-badge">OUT Q2</span>
-              <span v-else-if="r.position === 1" class="pole-badge">POLE</span>
-            </div>
-          </div>
-        </div>
+      <div class="q-track-wrap">
+        <TrackMap
+          :results="results"
+          :player-driver-ids="playerDriverIds"
+          :circuit="circuitData"
+          mode="qualifying"
+          class="q-track-final"
+        />
       </div>
 
-      <!-- Player drivers analysis -->
-      <div class="player-analysis card">
-        <div class="section-title">Анализ твоих пилотов</div>
-        <div v-for="r in playerResults" :key="r.id" class="player-result">
-          <div class="player-pos-circle" :class="posClass(r.position)">P{{ r.position }}</div>
-          <div class="player-result-info">
-            <div class="player-result-name">{{ r.driver?.name }}</div>
-            <div class="player-result-detail">
-              <span v-if="r.q3_time">Лучшее время Q3: {{ formatTime(r.q3_time) }}</span>
-              <span v-else-if="r.q2_time">Выбыл в Q2, лучшее: {{ formatTime(r.q2_time) }}</span>
-              <span v-else>Выбыл в Q1, лучшее: {{ formatTime(r.q1_time) }}</span>
+      <div class="q-bottom-row">
+        <div class="results-table card">
+          <div class="section-title">Стартовая решётка</div>
+          <div class="results-list">
+            <div
+              v-for="(r, i) in results"
+              :key="r.id"
+              class="result-row"
+              :class="{ player: isPlayerDriver(r.driver_id), eliminated: r.q1_eliminated || r.q2_eliminated }"
+            >
+              <div class="result-pos" :class="posClass(r.position)">{{ r.position }}</div>
+              <div class="team-stripe" :style="{ background: r.driver?.team?.color }"></div>
+              <div class="result-driver">
+                <span class="driver-code-sm">{{ r.driver?.code }}</span>
+                <span class="driver-name-sm">{{ r.driver?.name }}</span>
+              </div>
+              <div class="result-team">{{ r.driver?.team?.short_name }}</div>
+              <div class="result-times">
+                <span class="q-time" :class="{ best: !r.q1_eliminated }">
+                  Q1: {{ formatTime(r.q1_time) }}
+                </span>
+                <span v-if="r.q2_time" class="q-time" :class="{ best: !r.q2_eliminated }">
+                  Q2: {{ formatTime(r.q2_time) }}
+                </span>
+                <span v-if="r.q3_time" class="q-time best">
+                  Q3: {{ formatTime(r.q3_time) }}
+                </span>
+              </div>
+              <div class="result-eliminated">
+                <span v-if="r.q1_eliminated" class="elim-badge">OUT Q1</span>
+                <span v-else-if="r.q2_eliminated" class="elim-badge">OUT Q2</span>
+                <span v-else-if="r.position === 1" class="pole-badge">POLE</span>
+              </div>
             </div>
-            <div class="player-result-comment">{{ getPositionComment(r.position) }}</div>
           </div>
         </div>
 
-        <router-link :to="`/weekend/${route.params.id}/race`" class="btn btn-success btn-large proceed-btn">
-          🏎️ Начать гонку →
-        </router-link>
+        <!-- Player drivers analysis -->
+        <div class="player-analysis card">
+          <div class="section-title">Анализ твоих пилотов</div>
+          <div v-for="r in playerResults" :key="r.id" class="player-result">
+            <div class="player-pos-circle" :class="posClass(r.position)">P{{ r.position }}</div>
+            <div class="player-result-info">
+              <div class="player-result-name">{{ r.driver?.name }}</div>
+              <div class="player-result-detail">
+                <span v-if="r.q3_time">Лучшее время Q3: {{ formatTime(r.q3_time) }}</span>
+                <span v-else-if="r.q2_time">Выбыл в Q2, лучшее: {{ formatTime(r.q2_time) }}</span>
+                <span v-else>Выбыл в Q1, лучшее: {{ formatTime(r.q1_time) }}</span>
+              </div>
+              <div class="player-result-comment">{{ getPositionComment(r.position) }}</div>
+            </div>
+          </div>
+
+          <router-link :to="`/weekend/${route.params.id}/race`" class="btn btn-success btn-large proceed-btn">
+            🏎️ Начать гонку →
+          </router-link>
+        </div>
       </div>
     </div>
   </div>
@@ -99,18 +121,34 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useGameStore } from '../stores/gameStore';
 import api from '../api';
+import TrackMap from '../components/TrackMap.vue';
 
 const route = useRoute();
 const store = useGameStore();
 const results = ref([]);
 const loading = ref(false);
 const weekendName = ref('');
+const circuitData = ref(null);
+
+const playerDriverIds = computed(() =>
+  store.season?.player_team?.drivers?.map(d => d.id) || []
+);
+
+const dummyDrivers = computed(() =>
+  (store.season?.player_team?.drivers || []).map((d, i) => ({
+    driver_id: d.id,
+    driver: { code: d.code, team: store.season?.player_team },
+    gap_to_leader: i * 4,
+    status: 'running',
+  }))
+);
 
 onMounted(async () => {
+  await store.loadCurrentSeason();
   const { data } = await api.get(`/weekends/${route.params.id}/setup`);
   weekendName.value = data.weekend.race_name;
+  circuitData.value = data.weekend.circuit || null;
 
-  // Load existing results if available
   try {
     const qRes = await api.get(`/weekends/${route.params.id}/qualifying/results`);
     if (qRes.data.length) results.value = qRes.data;
@@ -126,10 +164,6 @@ async function simulate() {
     loading.value = false;
   }
 }
-
-const playerDriverIds = computed(() => {
-  return store.season?.player_team?.drivers?.map(d => d.id) || [];
-});
 
 function isPlayerDriver(driverId) {
   return playerDriverIds.value.includes(driverId);
@@ -190,18 +224,47 @@ h1 { font-size: 28px; font-weight: 700; }
 .pre-qual-info p { color: #888; font-size: 14px; margin-bottom: 6px; }
 .hint-text { color: #fbbf24 !important; }
 
-.simulating { text-align: center; padding: 60px; color: #888; font-size: 18px; }
+.simulating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+.q-track-loading {
+  width: 100%;
+  height: 320px;
+  border-radius: 12px;
+}
+.sim-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: #888;
+  font-size: 16px;
+}
 .sim-spinner {
   width: 40px; height: 40px;
   border: 3px solid #2a2a3e;
   border-top-color: #e10600;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.results-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
+.results-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.q-track-wrap { width: 100%; }
+.q-track-final {
+  width: 100%;
+  height: 280px;
+  border-radius: 12px;
+}
+.q-bottom-row { display: grid; grid-template-columns: 1fr 360px; gap: 16px; }
 
 .results-list { display: flex; flex-direction: column; gap: 2px; }
 .result-row {
