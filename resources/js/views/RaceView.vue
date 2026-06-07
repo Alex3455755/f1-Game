@@ -59,8 +59,10 @@
           :total-laps="totalLaps"
           :player-driver-ids="playerDriverIds"
           :circuit="circuitData"
+          :estimated-lap-time="estimatedLapTime"
           mode="race"
           class="race-track-map"
+          @lap-complete="onAnimLapComplete"
         />
         <!-- Live timing -->
         <div class="timing-panel card">
@@ -85,7 +87,7 @@
             </div>
             <div class="t-gap">
               <span v-if="i === 0" class="t-leader">ЛИДЕР</span>
-              <span v-else class="t-gap-val">+{{ Number(r.gap_to_leader).toFixed(1) }}s</span>
+              <span v-else class="t-gap-val">+{{ formatGap(r.gap_to_leader) }}</span>
             </div>
             <div class="t-pits">
               <span class="pit-count">{{ r.pit_stop_count }}п</span>
@@ -252,6 +254,7 @@ const radioMessages = ref([]);
 const startCompounds = ref({});
 const radioFeed = ref(null);
 const circuitData = ref(null);
+const estimatedLapTime = ref(90);   // updated from circuit data
 
 const weatherLabels = { sunny: '☀️ Солнечно', cloudy: '☁️ Облачно', rain: '🌧️ Дождь', heavy_rain: '⛈️ Ливень' };
 const compoundLabels = { soft: 'С Мягкие', medium: 'М Средние', hard: 'Т Твёрдые', intermediate: 'И Переходные', wet: 'Д Дождевые' };
@@ -311,6 +314,17 @@ function posClass(pos) {
   return 'pos-other';
 }
 
+// Format gap in seconds to M:SS.mmm or +SS.mmm
+function formatGap(sec) {
+  const s = Number(sec) || 0;
+  if (s >= 60) {
+    const m = Math.floor(s / 60);
+    const rem = (s % 60).toFixed(3).padStart(6, '0');
+    return `+${m}:${rem}`;
+  }
+  return `+${s.toFixed(3)}s`;
+}
+
 onMounted(async () => {
   await store.loadCurrentSeason();
   seasonId.value = store.season?.id;
@@ -321,6 +335,9 @@ onMounted(async () => {
   totalLaps.value = setupRes.data.weekend.circuit?.lap_count || 57;
   raceStatus.value = setupRes.data.weekend.status;
   circuitData.value = setupRes.data.weekend.circuit || null;
+  // Estimate lap time from circuit length and average speed (~210 km/h)
+  const len = setupRes.data.weekend.circuit?.length_km || 5.0;
+  estimatedLapTime.value = Math.round((len / 210) * 3600);
 
   // Default compounds
   playerDrivers.value.forEach(d => { startCompounds.value[d.id] = 'medium'; });
@@ -366,6 +383,13 @@ async function simLap() {
     if (radioFeed.value) radioFeed.value.scrollTop = radioFeed.value.scrollHeight;
   } finally {
     loading.value = false;
+  }
+}
+
+// Called by TrackMap animation every time leader crosses start/finish
+function onAnimLapComplete() {
+  if (!loading.value && raceStarted.value && raceStatus.value !== 'completed') {
+    simLap();
   }
 }
 

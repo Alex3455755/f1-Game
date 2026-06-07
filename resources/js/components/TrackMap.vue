@@ -74,6 +74,8 @@
         Круг <strong>{{ currentLap }}</strong>/{{ totalLaps }}
       </span>
       <span class="tm-lap" v-else><strong>Квалификация</strong></span>
+      <!-- Live lap timer (thousandths) -->
+      <span class="tm-timer" v-if="mode === 'race' && currentLap > 0">{{ lapTimerStr }}</span>
     </div>
 
     <div class="tm-legend">
@@ -90,13 +92,16 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 
 const props = defineProps({
-  results:        { type: Array,  default: () => [] },
-  currentLap:     { type: Number, default: 0 },
-  totalLaps:      { type: Number, default: 57 },
-  playerDriverIds:{ type: Array,  default: () => [] },
-  circuit:        { type: Object, default: null },
-  mode:           { type: String, default: 'race' },
+  results:           { type: Array,  default: () => [] },
+  currentLap:        { type: Number, default: 0 },
+  totalLaps:         { type: Number, default: 57 },
+  playerDriverIds:   { type: Array,  default: () => [] },
+  circuit:           { type: Object, default: null },
+  mode:              { type: String, default: 'race' },
+  estimatedLapTime:  { type: Number, default: 90 },   // seconds per lap
 });
+
+const emit = defineEmits(['lap-complete']);
 
 // ─── Real F1 circuit silhouettes (700×440 viewBox) ──────────────────────────
 const TRACKS = {
@@ -393,28 +398,48 @@ function selectTrackKey(circuit) {
   if (!circuit) return 'permanent_medium';
   const name = (circuit.name || '').toLowerCase();
 
-  if (name.includes('monaco') || name.includes('monte carlo'))    return 'monaco';
-  if (name.includes('silverstone') || name.includes('british'))   return 'silverstone';
-  if (name.includes('monza') || name.includes('nazionale'))       return 'monza';
-  if (name.includes('spa') || name.includes('francorchamps'))     return 'spa';
-  if (name.includes('suzuka'))                                     return 'suzuka';
-  if (name.includes('bahrain'))                                    return 'bahrain';
-  if (name.includes('hungaroring') || name.includes('hungarian')) return 'hungary';
-  if (name.includes('americas') || name.includes('cota') || name.includes('austin')) return 'cota';
-  if (name.includes('baku') || name.includes('azerbaijan'))       return 'baku';
-  if (name.includes('abu dhabi') || name.includes('yas'))         return 'abudhabi';
-  if (name.includes('interlagos') || name.includes('carlos pace')) return 'interlagos';
-  if (name.includes('jeddah') || name.includes('corniche'))       return 'jeddah';
-  if (name.includes('zandvoort') || name.includes('dutch'))       return 'zandvoort';
-  if (name.includes('villeneuve') || name.includes('canada'))     return 'canada';
-  if (name.includes('marina bay') || name.includes('singapore'))  return 'singapore';
-  if (name.includes('albert park') || name.includes('australia')) return 'australia';
+  // Exact-name matches first (highest priority)
+  if (name.includes('monaco') || name.includes('monte carlo'))         return 'monaco';
+  if (name.includes('silverstone'))                                     return 'silverstone';
+  if (name.includes('monza') || name.includes('nazionale monza'))      return 'monza';
+  if (name.includes('spa') || name.includes('francorchamps'))          return 'spa';
+  if (name.includes('suzuka'))                                          return 'suzuka';
+  if (name.includes('bahrain'))                                         return 'bahrain';
+  if (name.includes('hungaroring'))                                     return 'hungary';
+  if (name.includes('americas') || name.includes('austin'))            return 'cota';
+  if (name.includes('baku') || name.includes('azerbaijan'))            return 'baku';
+  if (name.includes('abu dhabi') || name.includes('yas marina'))       return 'abudhabi';
+  if (name.includes('interlagos') || name.includes('carlos pace'))     return 'interlagos';
+  if (name.includes('jeddah') || name.includes('corniche'))            return 'jeddah';
+  if (name.includes('zandvoort'))                                       return 'zandvoort';
+  if (name.includes('villeneuve') || name.includes('montreal'))        return 'canada';
+  if (name.includes('marina bay') || name.includes('singapore'))       return 'singapore';
+  if (name.includes('albert park') || name.includes('melbourne'))      return 'australia';
+  // Las Vegas has a massive 1.9 km straight → Baku-type
+  if (name.includes('las vegas') || name.includes('strip'))            return 'baku';
+  // Miami is a mixed semi-street circuit → COTA-type
+  if (name.includes('miami'))                                           return 'cota';
+  // Imola is very technical permanent → Hungary-type
+  if (name.includes('imola') || name.includes('enzo') || name.includes('dino ferrari')) return 'hungary';
+  // Mexico City stadium section → COTA-type
+  if (name.includes('rodriguez') || name.includes('mexico'))           return 'cota';
+  // Qatar (Losail) → Bahrain-type (both Middle East permanents)
+  if (name.includes('losail') || name.includes('qatar'))               return 'bahrain';
+  // Red Bull Ring is compact and fast → Zandvoort-type
+  if (name.includes('red bull ring') || name.includes('spielberg'))    return 'zandvoort';
+  // Barcelona is a medium-high downforce permanent → Silverstone-type
+  if (name.includes('barcelona') || name.includes('catalunya'))        return 'silverstone';
 
   // Fallback by circuit properties
   const { circuit_type, downforce_requirement, overtaking_difficulty } = circuit;
-  if (circuit_type === 'street') return 'singapore';
-  if (downforce_requirement <= 25) return 'permanent_fast';
-  if (overtaking_difficulty >= 75) return 'permanent_technical';
+  if (circuit_type === 'street') {
+    // Low overtaking = long straights (Baku-like), high = tight (Singapore-like)
+    if (overtaking_difficulty < 45) return 'baku';
+    if (overtaking_difficulty < 65) return 'canada';
+    return 'singapore';
+  }
+  if (downforce_requirement <= 30) return 'monza';
+  if (overtaking_difficulty >= 75) return 'hungary';
   return 'permanent_medium';
 }
 
@@ -436,10 +461,28 @@ function runFrame(ts) {
   if (!lastTs) lastTs = ts;
   const dt = ts - lastTs;
   lastTs = ts;
+
+  const prev = animProgress.value;
   animProgress.value = (animProgress.value + dt / CYCLE_MS) % 1.0;
+
+  // Detect wrap-around = leader crossed start/finish = one lap done
+  if (prev > animProgress.value) {
+    emit('lap-complete');
+  }
+
   computePositions();
   animId = requestAnimationFrame(runFrame);
 }
+
+// Live lap timer: animProgress maps 0→1 to 0→estimatedLapTime seconds
+const lapTimerStr = computed(() => {
+  const totalSec = animProgress.value * props.estimatedLapTime;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  const sec = Math.floor(s);
+  const ms  = Math.floor((s - sec) * 1000);
+  return `${m}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+});
 
 function computePositions() {
   const el = pathRef.value;
@@ -574,6 +617,14 @@ const topThree = computed(() => activeList.value.slice(0, 3));
 .tm-circuit { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
 .tm-lap { font-size: 13px; color: #aaa; }
 .tm-lap strong { color: #e10600; }
+.tm-timer {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #e8e8e8;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(225,6,0,0.5);
+}
 
 .tm-legend {
   position: absolute; bottom: 10px; right: 14px;
