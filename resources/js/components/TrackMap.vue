@@ -69,7 +69,7 @@
     </svg>
 
     <div class="tm-info">
-      <span class="tm-circuit">{{ circuit?.country || 'Трасса' }}</span>
+      <span class="tm-circuit">{{ circuit?.country || 'Трасса' }} · {{ circuit?.city || '' }}</span>
       <span class="tm-lap" v-if="mode === 'race'">
         Круг <strong>{{ currentLap }}</strong>/{{ totalLaps }}
       </span>

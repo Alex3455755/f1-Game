@@ -101,7 +101,10 @@ const store = useGameStore();
 const router = useRouter();
 const selectedTeam = ref(null);
 
-onMounted(() => store.fetchTeams());
+onMounted(async () => {
+  await store.loadCurrentSeason();
+  store.fetchTeams();
+});
 
 async function startSeason() {
   const season = await store.startSeason(selectedTeam.value.id);

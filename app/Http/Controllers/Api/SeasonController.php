@@ -31,31 +31,65 @@ class SeasonController extends Controller
             'current_round'  => 1,
         ]);
 
-        // Create race calendar
-        $circuits   = Circuit::inRandomOrder()->get();
-        $raceNames  = [
-            'Гран-При Бахрейна', 'Гран-При Саудовской Аравии', 'Гран-При Австралии',
-            'Гран-При Японии', 'Гран-При Китая', 'Гран-При Майами',
-            'Гран-При Эмилии-Романьи', 'Гран-При Монако', 'Гран-При Канады',
-            'Гран-При Испании', 'Гран-При Австрии', 'Гран-При Великобритании',
-            'Гран-При Венгрии', 'Гран-При Бельгии', 'Гран-При Нидерландов',
-            'Гран-При Италии', 'Гран-При Азербайджана', 'Гран-При Сингапура',
-            'Гран-При США', 'Гран-При Мексики', 'Гран-При Бразилии',
-            'Гран-При Лас-Вегаса', 'Гран-При Катара', 'Гран-При Абу-Даби',
+        // Race name derived directly from each circuit's data
+        $circuitGPNames = [
+            'Bahrain International Circuit'    => 'Гран-При Бахрейна',
+            'Jeddah Corniche Circuit'          => 'Гран-При Саудовской Аравии',
+            'Albert Park Circuit'              => 'Гран-При Австралии',
+            'Suzuka Circuit'                   => 'Гран-При Японии',
+            'Shanghai International Circuit'   => 'Гран-При Китая',
+            'Miami International Autodrome'    => 'Гран-При Майами',
+            'Autodromo Enzo e Dino Ferrari'    => 'Гран-При Эмилии-Романьи',
+            'Circuit de Monaco'                => 'Гран-При Монако',
+            'Circuit Gilles Villeneuve'        => 'Гран-При Канады',
+            'Circuit de Barcelona-Catalunya'   => 'Гран-При Испании',
+            'Red Bull Ring'                    => 'Гран-При Австрии',
+            'Silverstone Circuit'              => 'Гран-При Великобритании',
+            'Hungaroring'                      => 'Гран-При Венгрии',
+            'Circuit de Spa-Francorchamps'     => 'Гран-При Бельгии',
+            'Circuit Zandvoort'                => 'Гран-При Нидерландов',
+            'Autodromo Nazionale Monza'        => 'Гран-При Италии',
+            'Baku City Circuit'                => 'Гран-При Азербайджана',
+            'Marina Bay Street Circuit'        => 'Гран-При Сингапура',
+            'Circuit of the Americas'          => 'Гран-При США (Остин)',
+            'Autodromo Hermanos Rodriguez'     => 'Гран-При Мексики',
+            'Autodromo Jose Carlos Pace'       => 'Гран-При Бразилии',
+            'Las Vegas Strip Circuit'          => 'Гран-При Лас-Вегаса',
+            'Losail International Circuit'     => 'Гран-При Катара',
+            'Yas Marina Circuit'               => 'Гран-При Абу-Даби',
         ];
 
-        $weathers   = ['sunny', 'sunny', 'sunny', 'cloudy', 'cloudy', 'rain'];
-        $startDate  = now()->startOfYear()->addMonths(2);
+        // Typical weather per circuit city (rough approximation)
+        $circuitWeather = [
+            'Bahrain International Circuit'    => ['sunny','sunny','sunny','cloudy'],
+            'Jeddah Corniche Circuit'          => ['sunny','sunny','sunny'],
+            'Albert Park Circuit'              => ['sunny','cloudy','cloudy','rain'],
+            'Suzuka Circuit'                   => ['sunny','cloudy','rain','rain'],
+            'Miami International Autodrome'    => ['sunny','sunny','sunny','rain'],
+            'Autodromo Enzo e Dino Ferrari'    => ['cloudy','sunny','rain'],
+            'Circuit de Monaco'                => ['sunny','cloudy','rain'],
+            'Circuit de Spa-Francorchamps'     => ['cloudy','rain','rain','heavy_rain'],
+            'default'                          => ['sunny','sunny','cloudy','cloudy','rain'],
+        ];
+
+        // Get circuits in calendar order (seeded order = real F1 schedule)
+        $circuits  = Circuit::orderBy('id')->get();
+        $startDate = now()->startOfYear()->addMonths(2);
 
         foreach ($circuits as $i => $circuit) {
-            if ($i >= count($raceNames)) break;
+            $raceName = $circuitGPNames[$circuit->name]
+                ?? 'Гран-При ' . $circuit->country;
+
+            $weatherPool = $circuitWeather[$circuit->name]
+                ?? $circuitWeather['default'];
+
             RaceWeekend::create([
                 'season_id'    => $season->id,
                 'circuit_id'   => $circuit->id,
                 'round_number' => $i + 1,
-                'race_name'    => $raceNames[$i],
+                'race_name'    => $raceName,
                 'race_date'    => $startDate->copy()->addWeeks($i * 2),
-                'weather'      => $weathers[array_rand($weathers)],
+                'weather'      => $weatherPool[array_rand($weatherPool)],
                 'status'       => $i === 0 ? 'setup' : 'upcoming',
             ]);
         }
